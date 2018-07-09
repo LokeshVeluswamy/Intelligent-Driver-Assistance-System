@@ -1,0 +1,78 @@
+prevlat=0;
+prevlongt=0;
+prevfrontlat=0;
+prevfrontlongt=0;
+
+
+%% open the serial port
+s = serial('COM4');
+        
+set(s,'BaudRate',9600, 'Parity','none', 'Terminator', '!', 'InputBufferSize', 4500);
+fopen(s);
+
+count=1;
+collectioninterval=2;
+a=0;
+%% infinite loop 
+while count==1
+    
+    
+    A = fgetl(s);
+    if length(A)<2
+        continue;
+        pause(1);
+    end
+    A=strrep(A,'!','');
+    res = regexp(A,',','split');
+    lat=str2num(char(res(1)));
+    longt=str2num(char(res(2)));
+    distofront=str2num(char(res(3)));
+    
+    if (lat==0) && (longt==0)
+        fprintf(1,'Vehicle Stopped \n');
+        break;
+    end
+    
+    frontlat=lat+distofront;
+    frontlong=longt;     
+
+    fprintf('recieved Lat=%f , Longt=%f , Distance to other=%f \n',lat,longt,distofront);
+    
+    if ((prevlat==0)&&(prevlongt==0))
+        prevlat=lat;
+        prevlongt=longt;   
+                  
+        prevfrontlat=frontlat;
+        prevfrontlongt=frontlong;
+                  
+    else    
+    
+        distance = sqrt((lat - prevlat)^2 + (longt - prevlongt)^2);     
+        fdistance = sqrt((frontlat - prevfrontlat)^2 + (frontlong - prevfrontlongt)^2);  
+        cspeed= distance*1.0/collectioninterval;
+        %fspeed=fdistance*1.0/collectioninterval;
+        fspeed=30;
+        fprintf('Speed of current vehicle %f , Speed of forward vehicle=%f \n',cspeed,fspeed);
+        
+        cspeed=cspeed+a/collectioninterval;
+        if (cspeed>100)
+            cspeed=100;
+        end
+        % vb is the slowest vehicle
+        vb=cspeed;        
+        if vb<fspeed
+           vb=fspeed; 
+        end
+        % s is distance between vehicle
+        sid=distofront;
+        % reaction time is 5 sec for the driver
+        t=5;
+        % acceleration calculation
+        a = (cspeed-fspeed)/collectioninterval;
+        osd=vb*t + 2*sid + vb* sqrt(4*sid/a);
+        fprintf(1,'Accelearation to apply a=%d , OSD =%f \n',a,osd);
+        
+    end
+    
+    pause(collectioninterval);
+end
